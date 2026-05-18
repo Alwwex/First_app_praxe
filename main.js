@@ -4,21 +4,16 @@ const fs = require('fs');
 const { exec } = require('child_process');
 
 // ============================================================================
-// 1. AUTOMATICKÁ DETEKCE A OPRAVA VYKRESLOVÁNÍ
+// NASTAVENÍ PRO ELECTRON 30 (Chromium 124+)
 // ============================================================================
-app.commandLine.appendSwitch('disable-dev-shm-usage');
-
-const isRaspberryPi = process.arch === 'arm' || process.arch === 'arm64' || fs.existsSync('/boot/config.txt');
-
-if (isRaspberryPi) {
-    // Čisté a bezpečné vypnutí HW akcelerace pro Raspberry Pi OS 11
-    app.disableHardwareAcceleration();
-    app.commandLine.appendSwitch('disable-gpu');
-    app.commandLine.appendSwitch('no-sandbox');
-    console.log("Detekováno Raspberry Pi: Používám safe-mode softwarové grafiky.");
-} else {
-    console.log("Detekován klasický počítač/notebook: Spouštím v plném výkonu.");
-}
+// Vypneme HW akceleraci, ale NEZAKAZUJEME kompozici, kterou Electron 30 nutně vyžaduje
+app.disableHardwareAcceleration();
+app.commandLine.appendSwitch('disable-gpu');
+app.commandLine.appendSwitch('disable-gpu-rasterization');
+app.commandLine.appendSwitch('disable-gpu-sandbox'); // Klíčové pro gbm_wrapper na ARMu
+app.commandLine.appendSwitch('no-sandbox');
+app.commandLine.appendSwitch('disable-dev-shm-usage'); // Řeší paměť /dev/shm na notebooku
+app.commandLine.appendSwitch('ozone-platform', 'x11');     // Vynutí stabilní X11 rozhraní
 
 function checkAndInstallUdevRules() {
     if (process.platform !== 'linux') return;
@@ -47,13 +42,16 @@ function createWindow() {
         }
     });
 
-    // Absolutní cesta k tvému HTML souboru
+    // Načtení HTML souboru přes absolutní cestu
     win.loadFile(path.join(__dirname, 'index.html'));
 
-    // === ŽIVÁ KONTROLA CHYB ===
-    // Tento příkaz otevře vývojářské nástroje (Inspect Element). 
-    // Pokud by okno zůstalo bílé, v záložce "Console" uvidíš červeně napsané, proč.
+    // Otevře DevTools, v záložce Console uvidíš případné chyby samotného HTML/JS
     win.webContents.openDevTools();
+
+    // DIAGNOSTIKA PRO ELECTRON 30: Pokud by renderer přesto spadl, vypíše to do terminálu důvod
+    win.webContents.on('render-process-gone', (event, details) => {
+        console.log(`Renderer crash detekován! Důvod: ${details.reason}, Kód: ${details.exitCode}`);
+    });
 
     // ============================================================================
     // AUTOMATICKÉ PÁROVÁNÍ WEBHID
