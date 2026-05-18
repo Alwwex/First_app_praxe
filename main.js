@@ -4,14 +4,22 @@ const fs = require('fs');
 const { exec } = require('child_process');
 
 // ============================================================================
-// 1. AUTOMATICKÁ OPRAVA SDÍLENÉ PAMĚTI (Řeší pád na notebooku i Pi)
+// 1. AUTOMATICKÁ DETEKCE A OPRAVA PROSTŘEDÍ (Notebook vs Raspberry Pi)
 // ============================================================================
-app.commandLine.appendSwitch('disable-dev-shm-usage'); // Přesměruje paměť do /tmp, řeší chybu permision na /dev/shm
+// Tento příkaz řeší chyby se sdílenou pamětí (/dev/shm) univerzálně všude
+app.commandLine.appendSwitch('disable-dev-shm-usage');
 
-// Pro Raspberry Pi ponecháme softwarové vykreslování bezpečně zapnuté
-if (process.arch === 'arm' || process.arch === 'arm64') {
+// Zjistíme, zda jsme na Raspberry Pi (kontrolou architektury ARM nebo přítomnosti boot souboru)
+const isRaspberryPi = process.arch === 'arm' || process.arch === 'arm64' || fs.existsSync('/boot/config.txt');
+
+if (isRaspberryPi) {
+    // Pokud kód běží na Malině, zapne specifické opravy pro gbm_wrapper a jádro Linuxu
     app.disableHardwareAcceleration();
     app.commandLine.appendSwitch('disable-gpu');
+    app.commandLine.appendSwitch('no-sandbox'); // Klíčové pro start na 32-bitovém OS 11
+    console.log("Detekováno Raspberry Pi: Používám safe-mode grafiky.");
+} else {
+    console.log("Detekován klasický počítač/notebook: Spouštím v plném výkonu.");
 }
 
 // ============================================================================
@@ -22,20 +30,18 @@ function checkAndInstallUdevRules() {
 
     const rulePath = '/etc/udev/rules.d/99-wacom.rules';
     
-    // Pokud pravidlo ještě neexistuje, nainstalujeme ho pomocí grafického sudo (pkexec)
+    // Pokud pravidlo pro Wacom chybí, nainstalujeme ho přes systémové okno
     if (!fs.existsSync(rulePath)) {
-        console.log("Udev pravidlo chybí. Spouštím automatickou instalaci přes systémové okno...");
-        
         const ruleContent = 'SUBSYSTEM=="usb", ATTRS{idVendor}=="056a", ATTRS{idProduct}=="00a4", MODE="0666"\\nSUBSYSTEM=="hidraw", ATTRS{idVendor}=="056a", ATTRS{idProduct}=="00a4", MODE="0666"';
         
-        // pkexec vyvolá nativní systémové okno pro zadání hesla (žádný terminál!)
+        // pkexec vyvolá systémové grafické okno pro zadání hesla
         const cmd = `pkexec bash -c "echo -e '${ruleContent}' > ${rulePath} && udevadm control --reload-rules && udevadm trigger"`;
         
-        exec(cmd, (error, stdout, stderr) => {
+        exec(cmd, (error) => {
             if (error) {
-                console.error("Uživatel zrušil instalaci USB práv nebo zadal špatné heslo:", error);
+                console.error("Instalace práv zrušena uživatelem.");
             } else {
-                console.log("USB udev pravidla byla úspěšně zapsána na pozadí!");
+                console.log("USB udev pravidla úspěšně nastavena!");
             }
         });
     }
@@ -76,9 +82,9 @@ function createWindow() {
     });
 }
 
-// Inicializace aplikace
+// Spuštění Electronu
 app.whenReady().then(() => {
-    checkAndInstallUdevRules(); // Zkontroluje a případně graficky doinstaluje USB udev pravidla
+    checkAndInstallUdevRules(); 
     createWindow();
 
     app.on('activate', () => {
