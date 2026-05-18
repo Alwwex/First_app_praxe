@@ -1,10 +1,16 @@
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
 
-// Přepínače pro Raspberry Pi (aby nepadala grafika)
+// ============================================================================
+// OPRAVA DMA_BUF A BÍLÉ OBRAZOVKY PRO RASPBERRY PI (32-bit)
+// ============================================================================
 app.disableHardwareAcceleration();
 app.commandLine.appendSwitch('disable-gpu');
+app.commandLine.appendSwitch('disable-gpu-compositing');
+// ZÁSADNÍ: Přinutí Electron ignorovat dma_buf a vykreslit vše přes SwiftShader (CPU)
+app.commandLine.appendSwitch('use-gl', 'swiftshader'); 
 app.commandLine.appendSwitch('no-sandbox');
+app.commandLine.appendSwitch('disable-dev-shm-usage');
 
 function createWindow() {
     const win = new BrowserWindow({
@@ -19,7 +25,12 @@ function createWindow() {
 
     win.loadFile(path.join(__dirname, 'index.html'));
 
-    // Automatické párování Wacomu na pozadí
+    // Otevření konzole pro případnou kontrolu chyb (můžeš později smazat)
+    win.webContents.openDevTools();
+
+    // ============================================================================
+    // AUTOMATICKÉ PÁROVÁNÍ WACCOM TABLETU
+    // ============================================================================
     win.webContents.session.on('select-hid-device', (event, details, callback) => {
         event.preventDefault();
         const device = details.deviceList.find((d) => d.vendorId === 1386 && d.productId === 164);
