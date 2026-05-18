@@ -4,45 +4,35 @@ const fs = require('fs');
 const { exec } = require('child_process');
 
 // ============================================================================
-// 1. AUTOMATICKÁ DETEKCE A OPRAVA PROSTŘEDÍ (Notebook vs Raspberry Pi)
+// 1. AUTOMATICKÁ DETEKCE A OPRAVA VYKRESLOVÁNÍ
 // ============================================================================
-// Tento příkaz řeší chyby se sdílenou pamětí (/dev/shm) univerzálně všude
 app.commandLine.appendSwitch('disable-dev-shm-usage');
 
-// Zjistíme, zda jsme na Raspberry Pi (kontrolou architektury ARM nebo přítomnosti boot souboru)
 const isRaspberryPi = process.arch === 'arm' || process.arch === 'arm64' || fs.existsSync('/boot/config.txt');
 
 if (isRaspberryPi) {
-    // Pokud kód běží na Malině, zapne specifické opravy pro gbm_wrapper a jádro Linuxu
     app.disableHardwareAcceleration();
     app.commandLine.appendSwitch('disable-gpu');
-    app.commandLine.appendSwitch('no-sandbox'); // Klíčové pro start na 32-bitovém OS 11
-    console.log("Detekováno Raspberry Pi: Používám safe-mode grafiky.");
+    // Vynutíme softwarové překreslování, aby okno nezůstalo černé/bílé
+    app.commandLine.appendSwitch('disable-software-rasterizer', 'false');
+    app.commandLine.appendSwitch('no-sandbox');
+    console.log("Detekováno Raspberry Pi: Používám safe-mode softwarové grafiky.");
 } else {
     console.log("Detekován klasický počítač/notebook: Spouštím v plném výkonu.");
 }
 
-// ============================================================================
-// 2. AUTOMATICKÁ INSTALACE USB PRÁV (Udev) BEZ TERMINÁLU
-// ============================================================================
 function checkAndInstallUdevRules() {
-    if (process.platform !== 'linux') return; // Na Windows/macOS udev neexistuje
+    if (process.platform !== 'linux') return;
 
     const rulePath = '/etc/udev/rules.d/99-wacom.rules';
     
-    // Pokud pravidlo pro Wacom chybí, nainstalujeme ho přes systémové okno
     if (!fs.existsSync(rulePath)) {
         const ruleContent = 'SUBSYSTEM=="usb", ATTRS{idVendor}=="056a", ATTRS{idProduct}=="00a4", MODE="0666"\\nSUBSYSTEM=="hidraw", ATTRS{idVendor}=="056a", ATTRS{idProduct}=="00a4", MODE="0666"';
-        
-        // pkexec vyvolá systémové grafické okno pro zadání hesla
         const cmd = `pkexec bash -c "echo -e '${ruleContent}' > ${rulePath} && udevadm control --reload-rules && udevadm trigger"`;
         
         exec(cmd, (error) => {
-            if (error) {
-                console.error("Instalace práv zrušena uživatelem.");
-            } else {
-                console.log("USB udev pravidla úspěšně nastavena!");
-            }
+            if (error) console.error("Instalace udev pravidel zrušena.");
+            else console.log("Udev pravidla úspěšně zapsána!");
         });
     }
 }
@@ -58,10 +48,15 @@ function createWindow() {
         }
     });
 
-    win.loadFile('index.html');
+    // KLÍČOVÁ OPRAVA: Použití absolutní cesty. Teď už Electron index.html najde na 100 % kdekoliv
+    win.loadFile(path.join(__dirname, 'index.html'));
+
+    // POKUD BY OKNO BYLO STÁLE PRÁZDNÉ, odkomentuj řádek níže. 
+    // Otevře to vývojářskou konzoli (DevTools), kde hned uvidíme přesnou chybu:
+    // win.webContents.openDevTools();
 
     // ============================================================================
-    // 3. AUTOMATICKÉ PÁROVÁNÍ WEBHID (Už žádné vyskakovací okno Chromia)
+    // AUTOMATICKÉ PÁROVÁNÍ WEBHID
     // ============================================================================
     win.webContents.session.on('select-hid-device', (event, details, callback) => {
         event.preventDefault();
