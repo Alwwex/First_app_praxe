@@ -11,10 +11,9 @@ app.commandLine.appendSwitch('disable-dev-shm-usage');
 const isRaspberryPi = process.arch === 'arm' || process.arch === 'arm64' || fs.existsSync('/boot/config.txt');
 
 if (isRaspberryPi) {
+    // Čisté a bezpečné vypnutí HW akcelerace pro Raspberry Pi OS 11
     app.disableHardwareAcceleration();
     app.commandLine.appendSwitch('disable-gpu');
-    // Vynutíme softwarové překreslování, aby okno nezůstalo černé/bílé
-    app.commandLine.appendSwitch('disable-software-rasterizer', 'false');
     app.commandLine.appendSwitch('no-sandbox');
     console.log("Detekováno Raspberry Pi: Používám safe-mode softwarové grafiky.");
 } else {
@@ -48,12 +47,13 @@ function createWindow() {
         }
     });
 
-    // KLÍČOVÁ OPRAVA: Použití absolutní cesty. Teď už Electron index.html najde na 100 % kdekoliv
+    // Absolutní cesta k tvému HTML souboru
     win.loadFile(path.join(__dirname, 'index.html'));
 
-    // POKUD BY OKNO BYLO STÁLE PRÁZDNÉ, odkomentuj řádek níže. 
-    // Otevře to vývojářskou konzoli (DevTools), kde hned uvidíme přesnou chybu:
-    // win.webContents.openDevTools();
+    // === ŽIVÁ KONTROLA CHYB ===
+    // Tento příkaz otevře vývojářské nástroje (Inspect Element). 
+    // Pokud by okno zůstalo bílé, v záložce "Console" uvidíš červeně napsané, proč.
+    win.webContents.openDevTools();
 
     // ============================================================================
     // AUTOMATICKÉ PÁROVÁNÍ WEBHID
@@ -77,7 +77,6 @@ function createWindow() {
     });
 }
 
-// Spuštění Electronu
 app.whenReady().then(() => {
     checkAndInstallUdevRules(); 
     createWindow();
