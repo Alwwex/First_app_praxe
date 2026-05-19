@@ -231,6 +231,8 @@
             <button class="admin-tab active" onclick="switchAdminTab('tab-budova')">Aktuálně uvnitř</button>
             <button class="admin-tab" onclick="switchAdminTab('tab-cleni')">Kompletní databáze</button>
             <button class="admin-tab" onclick="switchAdminTab('tab-pravidla')">Správa textů/slidů</button>
+            
+            <button class="admin-tab" style="margin-left:auto; background:var(--lintech-red); color:white;" onclick="spustitOpravuUSB()">🔧 Opravit USB Tablet</button>
         </div>
 
         <div id="tab-budova" class="admin-section active" style="flex:1; overflow-y:auto;">
@@ -290,7 +292,7 @@
     }
 
     // ==========================================
-    // MULTI-CANVAS WACOM DRIVER
+    // MULTI-CANVAS WACOM DRIVER 
     // ==========================================
     var wacomstu430 = function () {
         this.config = { vid: 1386, pid: 164, pressureFactor: 1023, onPenDataCb: null };
@@ -301,7 +303,6 @@
         this.connect = async function (devEvent = null) {
             if (this.checkConnected()) return true;
             try {
-                // OPRAVA PRO RASPBERRY PI: Použití requestDevice místo getDevices
                 let devs = await navigator.hid.requestDevice({ filters: [{ vendorId: this.config.vid, productId: this.config.pid }] });
                 let wd = devEvent || (devs && devs.length > 0 ? devs[0] : null);
                 if (!wd) return false; this.device = wd;
@@ -330,7 +331,7 @@
     var lastX=0, lastY=0, lastMidX=0, lastMidY=0, scaleX, scaleY;
     const SMOOTHING = 0.38; let smoothX=0, smoothY=0; const thresh = 35;
 
-    // RESET APLIKACE (Ochrana proti úniku dat a paměti)
+    // RESET APLIKACE
     function resetAppState() {
         vybranyNavstevnikId = null;
         document.querySelectorAll('input').forEach(i => i.value = '');
@@ -598,6 +599,18 @@
         document.getElementById('admin-pravidlo-text').value = ''; loadAdminData();
     }
     async function adminSmazVsechnaPravidla() { if(confirm("Smazat veškeré texty předpisů?")) { await window.api.smazPravidla(); loadAdminData(); } }
+
+    // FUNKCE PRO OPRAVU USB NA RASPBERRY PI
+    async function spustitOpravuUSB() {
+        showKioskAlert("Pracuji...", "Nastavuji systémová práva pro Wacom tablet v Linuxu. Čekejte prosím...");
+        
+        const res = await window.api.opravUsb();
+        if (res.success) {
+            showKioskAlert("Úspěch!", res.msg);
+        } else {
+            showKioskAlert("Chyba", res.msg);
+        }
+    }
 </script>
 
 </body>
