@@ -5,17 +5,29 @@
   "main": "main.js",
   "scripts": {
     "start": "electron . --no-sandbox --disable-dev-shm-usage --ozone-platform-hint=x11 --disable-gpu --disable-software-rasterizer",
-    "build": "electron-builder --win"
+    "build:win": "electron-builder --win",
+    "build:linux": "electron-builder --linux",
+    "build:mac": "electron-builder --mac",
+    "build:all": "electron-builder -wml"
   },
   "build": {
     "appId": "com.tvojefirma.wacom",
     "productName": "Registrace Navstev",
     "win": {
       "target": "portable"
+    },
+    "linux": {
+      "target": "AppImage"
+    },
+    "mac": {
+      "target": "dmg"
     }
   },
   "devDependencies": {
     "electron": "^24.0.0",
     "electron-builder": "^24.4.0"
+  },
+  "dependencies": {
+    "mysql2": "^3.0.0"
   }
 }
