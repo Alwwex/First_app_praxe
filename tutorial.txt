@@ -1,0 +1,50 @@
+1. Install nodejs and npm
+2. Install index.html, main.js, preload.js and package.json and logo-lintech-dark 
+3. npm install 
+4. (Windows): install XAMPP
+4.1 (Linux): sudo apt update && sudo apt install apache2 mariadb-server php php-mysql -y
+4.2 (linux): sudo apt install phpmyadmin -y
+4.2.1 (linux): Select apache2, YES, Password
+4.3 (linux): sudo nano /etc/mysql/mariadb.conf.d/50-server.cnf
+4.3.1 (linux): change bind-address = 127.0.0.1 to bind-address = 0.0.0.0
+4.4 (linux): sudo systemctl restart mariadb
+4.5 (linux): sudo mysql
+4.5.1 (linux): CREATE USER 'username' IDENTIFIED BY 'Password'; GRANT ALL PRIVILEGES ON *.* TO 'username';FLUSH PRIVILEGES;exit;
+5. : http://IP/phpmyadmin
+6.: in main.js change: host: 'IP',user: 'username', password: 'Password'
+7.: make a database: evidence_navstev
+8.1: DROP TABLE IF EXISTS dochazka;DROP TABLE IF EXISTS navstevnici;
+8.2: 
+CREATE TABLE navstevnici (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    jmeno VARCHAR(255) NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    spolecnost VARCHAR(255),
+    telefon VARCHAR(50),
+    podpis_base64 LONGTEXT NOT NULL
+);
+8.3: 
+CREATE TABLE dochazka (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    navstevnik_id INT NOT NULL,
+    cas_prichodu TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    cas_odchodu TIMESTAMP NULL DEFAULT NULL,
+    stav ENUM('Uvnitr', 'Odesel') DEFAULT 'Uvnitr',
+    podpis_vstup_base64 LONGTEXT NOT NULL,
+    FOREIGN KEY (navstevnik_id) REFERENCES navstevnici(id)
+);
+8.4.:ALTER TABLE dochazka DROP FOREIGN KEY dochazka_ibfk_1;
+8.5: 
+ALTER TABLE dochazka 
+ADD CONSTRAINT dochazka_ibfk_1 
+FOREIGN KEY (navstevnik_id) REFERENCES navstevnici(id) 
+ON DELETE CASCADE;
+
+9.: npm start (pro testování)
+10.1.: npm run build:win (.exe)
+10.2: npm run build:linux (.appimage)
+10.3.: npm run build:mac (.dmg)
+
+
++ root access_
+registrovat, jméno: root, email: root@lintech.cz
