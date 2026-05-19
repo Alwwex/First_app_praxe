@@ -1,12 +1,21 @@
 {
-  "name": "wacom-stu430-app",
+  "name": "wacom-registrace",
   "version": "1.0.0",
-  "description": "Aplikace pro podpisovÃ½ tablet Wacom STU-430",
+  "description": "Podpisový systém pro návštěvy",
   "main": "main.js",
-"scripts": {
-    "start": "electron . --no-sandbox --disable-dev-shm-usage --ozone-platform-hint=x11 --disable-gpu --disable-software-rasterizer"
+  "scripts": {
+    "start": "electron . --no-sandbox --disable-dev-shm-usage --ozone-platform-hint=x11 --disable-gpu --disable-software-rasterizer",
+    "build": "electron-builder --win"
+  },
+  "build": {
+    "appId": "com.tvojefirma.wacom",
+    "productName": "Registrace Navstev",
+    "win": {
+      "target": "portable"
+    }
   },
   "devDependencies": {
-    "electron": "^30.0.0"
+    "electron": "^24.0.0",
+    "electron-builder": "^24.4.0"
   }
 }
