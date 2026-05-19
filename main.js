@@ -51,6 +51,7 @@ ipcMain.handle('uloz-navstevnika', async (event, data) => {
         const novyId = result.insertId;
         await connection.end();
 
+        // FYZICKÉ ULOŽENÍ NA DISK
         ulozObrazekNaDisk(novyId, 'registrace', data.podpis);
 
         return { success: true, id: novyId };
@@ -66,6 +67,7 @@ ipcMain.handle('zaznamenej-prichod', async (event, data) => {
         );
         await connection.end();
 
+        // FYZICKÉ ULOŽENÍ NA DISK
         ulozObrazekNaDisk(data.navstevnikId, 'vstup', data.podpisVstup);
 
         return { success: true };
@@ -93,6 +95,7 @@ ipcMain.handle('zaznamenej-odchod', async (event, dochazkaId) => {
     } catch (error) { return { success: false, error: error.message }; }
 });
 
+// --- ADMIN HANDLERY ---
 ipcMain.handle('nacti-vsechny-cleny', async () => {
     try {
         const connection = await mysql.createConnection(dbConfig);
@@ -133,11 +136,26 @@ ipcMain.handle('smaz-pravidla', async () => {
     } catch (error) { return { success: false }; }
 });
 
-function checkAndInstallUdevRules(callback) {
-    // Odstraněno zasekávající se automatické pkexec sudo volání na Raspberry Pi.
-    // UDEV pravidla se na Raspberry Pi musí nastavit ručně v terminálu.
-    callback();
-}
+// --- OPRAVA USB PRO RASPBERRY PI ---
+ipcMain.handle('oprav-usb', async () => {
+    return new Promise((resolve) => {
+        if (process.platform !== 'linux') {
+            resolve({ success: false, msg: "Tato oprava je určena pouze pro Raspberry Pi (Linux)." });
+            return;
+        }
+        
+        const rule = 'SUBSYSTEM==\\"usb\\", ATTRS{idVendor}==\\"056a\\", ATTRS{idProduct}==\\"00a4\\", MODE=\\"0666\\"\\nSUBSYSTEM==\\"hidraw\\", ATTRS{idVendor}==\\"056a\\", ATTRS{idProduct}==\\"00a4\\", MODE=\\"0666\\"';
+        const cmd = `sudo sh -c "echo -e '${rule}' > /etc/udev/rules.d/99-wacom.rules" && sudo udevadm control --reload-rules && sudo udevadm trigger && sudo chmod 666 /dev/hidraw*`;
+        
+        exec(cmd, (error, stdout, stderr) => {
+            if (error) {
+                resolve({ success: false, msg: "Nepodařilo se nastavit práva: " + error.message });
+            } else {
+                resolve({ success: true, msg: "Systémová práva tabletu byla úspěšně nastavena! Nyní fyzicky odpojte a znovu zapojte USB kabel tabletu do Raspberry Pi." });
+            }
+        });
+    });
+});
 
 function createWindow() {
     const win = new BrowserWindow({
@@ -146,7 +164,6 @@ function createWindow() {
     });
     win.removeMenu(); win.loadFile(path.join(__dirname, 'index.html'));
     
-    // Auto-povolení tabletu
     win.webContents.session.on('select-hid-device', (e, d, cb) => { 
         e.preventDefault(); 
         const dev = d.deviceList.find((x) => x.vendorId === 1386 && x.productId === 164); 
@@ -156,5 +173,5 @@ function createWindow() {
     win.webContents.session.setDevicePermissionHandler((d) => d.deviceType === 'hid' && d.device.vendorId === 1386 && d.device.productId === 164);
 }
 
-app.whenReady().then(() => { checkAndInstallUdevRules(() => { createWindow(); }); });
+app.whenReady().then(createWindow);
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
