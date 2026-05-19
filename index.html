@@ -2,174 +2,240 @@
 <html lang="cs">
 <head>
     <meta charset="UTF-8">
-    <title>Wacom STU-430 | Desktop App</title>
+    <title>Evidence Návštěv</title>
     <style>
-        body { 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            display: flex; flex-direction: column; align-items: center; 
-            padding: 20px; background: #1e1e1e; color: #ffffff;
-            user-select: none; margin: 0;
-        }
-        h2 { margin-top: 10px; margin-bottom: 5px; }
-        .controls { margin-bottom: 25px; display: flex; gap: 10px; width: 100%; max-width: 550px; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f4f4f9; color: #333; display: flex; justify-content: center; padding: 20px; margin: 0; }
+        .container { background: #fff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); max-width: 800px; width: 100%; display: flex; gap: 30px; }
+        .form-section { flex: 1; position: relative; }
+        .canvas-section { flex: 1; display: flex; flex-direction: column; align-items: center; }
         
-        #canvasWrapper {
-            position: relative;
-            width: 550px; height: 340px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-            border-radius: 5px; background: #ffffff;
-        }
+        h2 { margin-top: 0; color: #2c3e50; font-size: 24px; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; font-weight: bold; margin-bottom: 5px; font-size: 14px; }
+        input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
+        .optional { color: #888; font-weight: normal; font-size: 12px; }
         
-        canvas { 
-            cursor: crosshair; position: absolute; top: 0; left: 0;
-            width: 100%; height: 100%; border-radius: 5px;
-        }
+        #suggestions { position: absolute; background: white; border: 1px solid #ccc; width: 100%; max-height: 150px; overflow-y: auto; z-index: 100; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: none; }
+        .suggestion-item { padding: 10px; cursor: pointer; border-bottom: 1px solid #eee; }
+        .suggestion-item:hover { background: #3498db; color: white; }
 
-        button { 
-            flex: 1; padding: 12px 24px; font-size: 15px; cursor: pointer; 
-            color: #fff; border: none; border-radius: 5px; transition: 0.2s; font-weight: bold;
-        }
-        #connectBtn { background: #0078D7; }
-        #connectBtn:hover { background: #005a9e; }
-        #clearBtn { background: #d9534f; }
-        #clearBtn:hover { background: #c9302c; }
-        #saveBtn { background: #28a745; }
-        #saveBtn:hover { background: #218838; }
+        canvas { border: 2px dashed #bdc3c7; border-radius: 5px; cursor: crosshair; background: #fff; width: 100%; height: 200px; }
+        
+        .btn-group { display: flex; gap: 10px; width: 100%; margin-top: 15px; }
+        button { flex: 1; padding: 12px; font-size: 14px; cursor: pointer; color: #fff; border: none; border-radius: 5px; font-weight: bold; transition: 0.2s; }
+        #connectBtn { background: #3498db; }
+        #clearBtn { background: #e74c3c; }
+        #submitBtn { background: #2ecc71; width: 100%; margin-top: 15px; padding: 15px; font-size: 18px; }
     </style>
 </head>
 <body>
 
-    <h2>Podpisový systém Wacom</h2>
-    <p style="margin-top:0; color:#aaa; font-size:14px;">Stav: Připraveno</p>
-    
-    <div class="controls">
-        <button id="connectBtn">Připojit tablet</button>
-        <button id="clearBtn">Smazat</button>
-        <button id="saveBtn">Uložit podpis</button>
+<div class="container">
+    <div class="form-section">
+        <h2>Evidence návštěvy</h2>
+        <div class="form-group">
+            <label>Jméno a příjmení *</label>
+            <input type="text" id="jmeno" autocomplete="off" placeholder="Začněte psát pro vyhledání...">
+            <div id="suggestions"></div>
+        </div>
+        <div class="form-group">
+            <label>E-mail *</label>
+            <input type="email" id="email">
+        </div>
+        <div class="form-group">
+            <label>Název společnosti <span class="optional">(Nepovinné)</span></label>
+            <input type="text" id="spolecnost">
+        </div>
+        <div class="form-group">
+            <label>Telefonní číslo <span class="optional">(Nepovinné)</span></label>
+            <input type="text" id="telefon">
+        </div>
     </div>
 
-    <div id="canvasWrapper">
-        <canvas id="signatureCanvas" width="1100" height="680"></canvas>
+    <div class="canvas-section">
+        <h2>Podpis</h2>
+        <canvas id="signatureCanvas" width="800" height="400"></canvas>
+        <div class="btn-group">
+            <button id="connectBtn" type="button">Připojit tablet</button>
+            <button id="clearBtn" type="button">Zkusit znovu</button>
+        </div>
+        <button id="submitBtn" type="button">Zaevidovat návštěvu</button>
     </div>
+</div>
 
-    <script>
-        var wacomstu430 = function () {
-            this.config = { vid: 1386, pid: 164, pressureFactor: 1023, onPenDataCb: null };
-            this.command = { penData: 0x01, clearScreen: 0x20, writingMode: 0x0E, inkMode: 0x21, penColorAndWidth: 0x2D, penDataTiming: 0x34 };
-            this.device = null;
+<script>
+    // ==========================================
+    // DRIVER WACOMSTU430 A KRESLENÍ
+    // ==========================================
+    var wacomstu430 = function () {
+        this.config = { vid: 1386, pid: 164, pressureFactor: 1023, onPenDataCb: null };
+        this.command = { penData: 0x01, clearScreen: 0x20, writingMode: 0x0E, inkMode: 0x21, penColorAndWidth: 0x2D, penDataTiming: 0x34 };
+        this.device = null;
 
-            this.checkConnected = function () { return this.device && this.device.opened; }.bind(this);
+        this.checkConnected = function () { return this.device && this.device.opened; }.bind(this);
 
-            this.connect = async function () {
-                if (this.checkConnected()) return true;
-                
-                try {
-                    let devices = await navigator.hid.requestDevice({ filters: [{ vendorId: this.config.vid, productId: this.config.pid }] });
-                    
-                    if (!devices || devices.length === 0) {
-                        alert("Tablet nebyl nalezen. Zkontrolujte zapojení USB kabelu.");
-                        return false;
-                    }
-                    
-                    this.device = devices[0];
-                    if (!this.device.opened) await this.device.open();
-
-                    this.device.addEventListener("inputreport", function (event) {
-                        if (!this.config.onPenDataCb) return;
-                        if (event.reportId === this.command.penData || event.reportId === this.command.penDataTiming) {
-                            let data = event.data;
-                            this.config.onPenDataCb({
-                                cx: data.getUint16(2), cy: data.getUint16(4),
-                                press: data.getUint16(0) / this.config.pressureFactor
-                            });
-                        }
-                    }.bind(this));
-                    
-                    return true;
-                } catch (err) {
-                    alert("Kritická chyba při spojení s tabletem:\n" + err.message + "\n\nZkuste tablet vypojit a zapojit.");
+        this.connect = async function () {
+            if (this.checkConnected()) return true;
+            try {
+                let devices = await navigator.hid.requestDevice({ filters: [{ vendorId: this.config.vid, productId: this.config.pid }] });
+                if (!devices || devices.length === 0) {
+                    alert("Tablet nebyl nalezen. Zkontrolujte zapojení USB kabelu.");
                     return false;
                 }
-            }.bind(this);
+                this.device = devices[0];
+                if (!this.device.opened) await this.device.open();
 
-            this.sendData = async function (reportId, data) {
-                if (!this.checkConnected()) return;
-                try { await this.device.sendFeatureReport(reportId, data); } 
-                catch (e) { try { await this.device.sendReport(reportId, data); } catch(err){} }
-            }.bind(this);
+                this.device.addEventListener("inputreport", function (event) {
+                    if (!this.config.onPenDataCb) return;
+                    if (event.reportId === this.command.penData || event.reportId === this.command.penDataTiming) {
+                        let data = event.data;
+                        this.config.onPenDataCb({
+                            cx: data.getUint16(2), cy: data.getUint16(4),
+                            press: data.getUint16(0) / this.config.pressureFactor
+                        });
+                    }
+                }.bind(this));
+                return true;
+            } catch (err) {
+                alert("Kritická chyba při spojení s tabletem:\n" + err.message);
+                return false;
+            }
+        }.bind(this);
 
-            this.clearScreen = async function () { await this.sendData(this.command.clearScreen, new Uint8Array([0])); }.bind(this);
-            this.setWritingMode = async function (mode) { await this.sendData(this.command.writingMode, new Uint8Array([mode])); }.bind(this);
-            this.setInking = async function (enabled) { await this.sendData(this.command.inkMode, new Uint8Array([enabled ? 1 : 0])); }.bind(this);
-            this.setPenColorAndWidth = async function (color, width) { await this.sendData(this.command.penColorAndWidth, new Uint8Array([0, 0, 0, parseInt(width)])); }.bind(this);
-            this.onPenData = function (callback) { this.config.onPenDataCb = callback; }.bind(this);
+        this.sendData = async function (reportId, data) {
+            if (!this.checkConnected()) return;
+            try { await this.device.sendFeatureReport(reportId, data); } 
+            catch (e) { try { await this.device.sendReport(reportId, data); } catch(err){} }
+        }.bind(this);
+
+        this.clearScreen = async function () { await this.sendData(this.command.clearScreen, new Uint8Array([0])); }.bind(this);
+        this.setWritingMode = async function (mode) { await this.sendData(this.command.writingMode, new Uint8Array([mode])); }.bind(this);
+        this.setInking = async function (enabled) { await this.sendData(this.command.inkMode, new Uint8Array([enabled ? 1 : 0])); }.bind(this);
+        this.setPenColorAndWidth = async function (color, width) { await this.sendData(this.command.penColorAndWidth, new Uint8Array([0, 0, 0, parseInt(width)])); }.bind(this);
+        this.onPenData = function (callback) { this.config.onPenDataCb = callback; }.bind(this);
+    };
+
+    var wacom = new wacomstu430();
+    var canvas = document.getElementById("signatureCanvas");
+    var context = canvas.getContext("2d");
+    var isDrawing = false;
+    var lastX = 0, lastY = 0, lastMidX = 0, lastMidY = 0;
+    const scaleX = canvas.width / 9600;
+    const scaleY = canvas.height / 6000;
+    const SMOOTHING_FACTOR = 0.38;
+    let smoothX = 0, smoothY = 0;
+    const sensitivityThreshold = 35;
+
+    window.addEventListener('DOMContentLoaded', () => {
+        context.lineCap = 'round'; context.lineJoin = 'round';
+        context.strokeStyle = "#000000"; context.lineWidth = 4.5;
+    });
+
+    document.getElementById("connectBtn").addEventListener("click", async function(){
+        this.innerText = "Připojuji...";
+        let success = await wacom.connect();
+        if (success) {
+            await wacom.clearScreen();
+            await wacom.setWritingMode(1);
+            await wacom.setInking(true);
+            await wacom.setPenColorAndWidth("#000000", 2);
+            this.innerText = "Připojeno ✔";
+            this.style.background = "#28a745";
+        } else {
+            this.innerText = "Připojit tablet";
+        }
+    });
+
+    document.getElementById("clearBtn").addEventListener("click", async function(){
+        context.clearRect(0, 0, canvas.width, canvas.height);
+        if (wacom.checkConnected()) await wacom.clearScreen();
+    });
+
+    wacom.onPenData(function(pen) {
+        if (pen.cx === 0 && pen.cy === 0) return;
+        var drawX = pen.cx * scaleX; var drawY = pen.cy * scaleY;
+        if (pen.press < sensitivityThreshold) {
+            smoothX = drawX; smoothY = drawY; isDrawing = false;
+        } else {
+            if (!isDrawing) {
+                lastX = smoothX; lastY = smoothY; lastMidX = smoothX; lastMidY = smoothY; isDrawing = true;
+            } else {
+                smoothX = smoothX * (1 - SMOOTHING_FACTOR) + drawX * SMOOTHING_FACTOR;
+                smoothY = smoothY * (1 - SMOOTHING_FACTOR) + drawY * SMOOTHING_FACTOR;
+                var midX = (lastX + smoothX) / 2; var midY = (lastY + smoothY) / 2;
+                context.beginPath(); context.moveTo(lastMidX, lastMidY);
+                context.quadraticCurveTo(lastX, lastY, midX, midY); context.stroke();
+                lastX = smoothX; lastY = smoothY; lastMidX = midX; lastMidY = midY;
+            }
+        }
+    });
+
+    // ==========================================
+    // LOGIKA PRO NAŠEPTÁVAČ (AUTOCOMPLETE)
+    // ==========================================
+    const jmenoInput = document.getElementById('jmeno');
+    const suggestionsBox = document.getElementById('suggestions');
+
+    jmenoInput.addEventListener('input', async (e) => {
+        const text = e.target.value;
+        if (text.length < 2) { suggestionsBox.style.display = 'none'; return; }
+        
+        const results = await window.api.hledejOsobu(text);
+        
+        if (results && results.length > 0) {
+            suggestionsBox.innerHTML = '';
+            results.forEach(osoba => {
+                const div = document.createElement('div');
+                div.className = 'suggestion-item';
+                div.innerText = `${osoba.jmeno} (${osoba.spolecnost || 'Bez společnosti'})`;
+                div.onclick = () => {
+                    document.getElementById('jmeno').value = osoba.jmeno;
+                    document.getElementById('email').value = osoba.email;
+                    document.getElementById('spolecnost').value = osoba.spolecnost;
+                    document.getElementById('telefon').value = osoba.telefon;
+                    suggestionsBox.style.display = 'none';
+                };
+                suggestionsBox.appendChild(div);
+            });
+            suggestionsBox.style.display = 'block';
+        } else {
+            suggestionsBox.style.display = 'none';
+        }
+    });
+
+    document.addEventListener('click', (e) => {
+        if(e.target !== jmenoInput) suggestionsBox.style.display = 'none';
+    });
+
+    // ==========================================
+    // ODESLÁNÍ DO DATABÁZE A ČIŠTĚNÍ
+    // ==========================================
+    document.getElementById('submitBtn').addEventListener('click', async () => {
+        const data = {
+            jmeno: document.getElementById('jmeno').value,
+            email: document.getElementById('email').value,
+            spolecnost: document.getElementById('spolecnost').value,
+            telefon: document.getElementById('telefon').value,
+            podpis: document.getElementById('signatureCanvas').toDataURL("image/png")
         };
 
-        var wacom = new wacomstu430();
-        var canvas = document.getElementById("signatureCanvas");
-        var context = canvas.getContext("2d");
+        if(!data.jmeno || !data.email) {
+            alert("Prosím vyplňte jméno a email!");
+            return;
+        }
 
-        var isDrawing = false;
-        var lastX = 0, lastY = 0, lastMidX = 0, lastMidY = 0;
-        const scaleX = canvas.width / 9600;
-        const scaleY = canvas.height / 6000;
-        const SMOOTHING_FACTOR = 0.38;
-        let smoothX = 0, smoothY = 0;
-        const sensitivityThreshold = 35;
-
-        window.addEventListener('DOMContentLoaded', () => {
-            context.lineCap = 'round'; context.lineJoin = 'round';
-            context.strokeStyle = "#000000"; context.lineWidth = 4.5;
-        });
-
-        document.getElementById("connectBtn").addEventListener("click", async function(){
-            this.innerText = "Připojuji...";
-            let success = await wacom.connect();
-            
-            if (success) {
-                await wacom.clearScreen();
-                await wacom.setWritingMode(1);
-                await wacom.setInking(true);
-                await wacom.setPenColorAndWidth("#000000", 2);
-                this.innerText = "Připojeno ✔";
-                this.style.background = "#28a745";
-            } else {
-                this.innerText = "Připojit tablet";
-            }
-        });
-
-        document.getElementById("clearBtn").addEventListener("click", async function(){
+        const response = await window.api.ulozNavstevu(data);
+        if (response.success) {
+            alert("Návštěva byla úspěšně zaevidována!");
+            // Vymaže formulář
+            document.querySelectorAll('input').forEach(input => input.value = '');
+            // Vymaže plátno a displej tabletu na čistý stav
             context.clearRect(0, 0, canvas.width, canvas.height);
             if (wacom.checkConnected()) await wacom.clearScreen();
-        });
-
-        document.getElementById("saveBtn").addEventListener("click", function(){
-            var a = document.createElement("a");
-            a.href = canvas.toDataURL("image/png"); a.download = "podpis.png";
-            document.body.appendChild(a); a.click(); document.body.removeChild(a);
-        });
-
-        wacom.onPenData(function(pen) {
-            if (pen.cx === 0 && pen.cy === 0) return;
-            var drawX = pen.cx * scaleX; var drawY = pen.cy * scaleY;
-            
-            if (pen.press < sensitivityThreshold) {
-                smoothX = drawX; smoothY = drawY; isDrawing = false;
-            } else {
-                if (!isDrawing) {
-                    lastX = smoothX; lastY = smoothY; lastMidX = smoothX; lastMidY = smoothY; isDrawing = true;
-                } else {
-                    smoothX = smoothX * (1 - SMOOTHING_FACTOR) + drawX * SMOOTHING_FACTOR;
-                    smoothY = smoothY * (1 - SMOOTHING_FACTOR) + drawY * SMOOTHING_FACTOR;
-                    var midX = (lastX + smoothX) / 2; var midY = (lastY + smoothY) / 2;
-
-                    context.beginPath(); context.moveTo(lastMidX, lastMidY);
-                    context.quadraticCurveTo(lastX, lastY, midX, midY); context.stroke();
-                    
-                    lastX = smoothX; lastY = smoothY; lastMidX = midX; lastMidY = midY;
-                }
-            }
-        });
-    </script>
+        } else {
+            alert("Chyba při ukládání: " + response.error);
+        }
+    });
+</script>
 </body>
 </html>
