@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const mysql = require('mysql2/promise');
 
-const dbConfig = { host: '127.0.0.1', user: 'root', password: '', database: 'evidence_navstev' };
+const dbConfig = { host: '127.0.0.1', user: 'lintech', password: '123456', database: 'evidence_navstev' };
 
 function ulozObrazekNaDisk(id, typ, base64String) {
     try {
