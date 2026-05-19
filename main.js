@@ -1,65 +1,47 @@
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
-const fs = require('fs');
-const { exec } = require('child_process');
 
 // ============================================================================
-// 1. AUTOMATICKÁ OPRAVA SDÍLENÉ PAMĚTI (Řeší pád na notebooku i Pi)
+// OPRAVA PRO 64-BIT RASPBERRY PI OS 12 (WAYLAND / BOOKWORM)
 // ============================================================================
-app.commandLine.appendSwitch('disable-dev-shm-usage'); // Přesměruje paměť do /tmp, řeší chybu permision na /dev/shm
+// Přinutíme Electron komunikovat s novým grafickým systémem Wayland
+app.commandLine.appendSwitch('ozone-platform-hint', 'auto');
 
-// Pro Raspberry Pi ponecháme softwarové vykreslování bezpečně zapnuté
-if (process.arch === 'arm' || process.arch === 'arm64') {
-    app.disableHardwareAcceleration();
-    app.commandLine.appendSwitch('disable-gpu');
-}
+// Bezpečné vypnutí problematických grafických bufferů
+app.disableHardwareAcceleration();
+app.commandLine.appendSwitch('disable-gpu');
+app.commandLine.appendSwitch('disable-gpu-compositing');
+app.commandLine.appendSwitch('disable-software-rasterizer');
 
-// ============================================================================
-// 2. AUTOMATICKÁ INSTALACE USB PRÁV (Udev) BEZ TERMINÁLU
-// ============================================================================
-function checkAndInstallUdevRules() {
-    if (process.platform !== 'linux') return; // Na Windows/macOS udev neexistuje
-
-    const rulePath = '/etc/udev/rules.d/99-wacom.rules';
-    
-    // Pokud pravidlo ještě neexistuje, nainstalujeme ho pomocí grafického sudo (pkexec)
-    if (!fs.existsSync(rulePath)) {
-        console.log("Udev pravidlo chybí. Spouštím automatickou instalaci přes systémové okno...");
-        
-        const ruleContent = 'SUBSYSTEM=="usb", ATTRS{idVendor}=="056a", ATTRS{idProduct}=="00a4", MODE="0666"\\nSUBSYSTEM=="hidraw", ATTRS{idVendor}=="056a", ATTRS{idProduct}=="00a4", MODE="0666"';
-        
-        // pkexec vyvolá nativní systémové okno pro zadání hesla (žádný terminál!)
-        const cmd = `pkexec bash -c "echo -e '${ruleContent}' > ${rulePath} && udevadm control --reload-rules && udevadm trigger"`;
-        
-        exec(cmd, (error, stdout, stderr) => {
-            if (error) {
-                console.error("Uživatel zrušil instalaci USB práv nebo zadal špatné heslo:", error);
-            } else {
-                console.log("USB udev pravidla byla úspěšně zapsána na pozadí!");
-            }
-        });
-    }
-}
+// Pojistky proti pádům linuxového jádra na Raspberry
+app.commandLine.appendSwitch('disable-dev-shm-usage');
+app.commandLine.appendSwitch('no-sandbox');
 
 function createWindow() {
     const win = new BrowserWindow({
         width: 700,
         height: 600,
-        resizable: false,
+        resizable: false, // Ideální pro stabilní registrační kiosek
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true
         }
     });
 
-    win.loadFile('index.html');
+    // Načtení samotného plátna přes absolutní cestu
+    win.loadFile(path.join(__dirname, 'index.html'));
+
+    // Pokud bys potřeboval hledat chyby v HTML/JS, odkomentuj řádek níže:
+    // win.webContents.openDevTools();
 
     // ============================================================================
-    // 3. AUTOMATICKÉ PÁROVÁNÍ WEBHID (Už žádné vyskakovací okno Chromia)
+    // AUTOMATICKÉ PÁROVÁNÍ WEBHID PRO WACOM STU-430
     // ============================================================================
     win.webContents.session.on('select-hid-device', (event, details, callback) => {
         event.preventDefault();
+        // Hledáme tablet podle Vendor ID (1386) a Product ID (164)
         const device = details.deviceList.find((d) => d.vendorId === 1386 && d.productId === 164);
+        
         if (device) {
             callback(device.deviceId);
         } else {
@@ -76,9 +58,8 @@ function createWindow() {
     });
 }
 
-// Inicializace aplikace
+// Inicializace celé aplikace
 app.whenReady().then(() => {
-    checkAndInstallUdevRules(); // Zkontroluje a případně graficky doinstaluje USB udev pravidla
     createWindow();
 
     app.on('activate', () => {
@@ -86,6 +67,7 @@ app.whenReady().then(() => {
     });
 });
 
+// Čisté ukončení procesu po zavření okna
 app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit();
 });
