@@ -162,15 +162,22 @@ function createWindow() {
         width: 1280, height: 800, fullscreen: true, autoHideMenuBar: true,
         webPreferences: { nodeIntegration: false, contextIsolation: true, preload: path.join(__dirname, 'preload.js') }
     });
-    win.removeMenu(); win.loadFile(path.join(__dirname, 'index.html'));
     
-    win.webContents.session.on('select-hid-device', (e, d, cb) => { 
-        e.preventDefault(); 
-        const dev = d.deviceList.find((x) => x.vendorId === 1386 && x.productId === 164); 
-        if(dev) cb(dev.deviceId); else cb(); 
+    // Povolení všech HID zařízení bez dotazování (na RPi nutnost)
+    win.webContents.session.on('select-hid-device', (event, details, callback) => {
+        event.preventDefault();
+        if (details.deviceList && details.deviceList.length > 0) {
+            callback(details.deviceList[0].deviceId);
+        } else {
+            callback();
+        }
     });
-    win.webContents.session.setPermissionCheckHandler((wc, perm) => perm === 'hid');
-    win.webContents.session.setDevicePermissionHandler((d) => d.deviceType === 'hid' && d.device.vendorId === 1386 && d.device.productId === 164);
+
+    win.webContents.session.setPermissionCheckHandler((webContents, permission) => permission === 'hid');
+    win.webContents.session.setDevicePermissionHandler((details) => true); // Povolit vše
+
+    win.removeMenu(); 
+    win.loadFile(path.join(__dirname, 'index.html'));
 }
 
 app.whenReady().then(createWindow);
