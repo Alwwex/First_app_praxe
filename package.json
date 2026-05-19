@@ -1,10 +1,10 @@
 {
   "name": "wacom-stu430-app",
   "version": "1.0.0",
-  "description": "Aplikace pro podpisový tablet Wacom STU-430",
+  "description": "Aplikace pro podpisovÃ½ tablet Wacom STU-430",
   "main": "main.js",
-  "scripts": {
-    "start": "electron ."
+"scripts": {
+    "start": "electron . --no-sandbox --disable-dev-shm-usage --ozone-platform-hint=x11 --disable-gpu --disable-software-rasterizer"
   },
   "devDependencies": {
     "electron": "^30.0.0"
