@@ -1,16 +1,45 @@
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
+const fs = require('fs');
+const { exec } = require('child_process');
 
 // ============================================================================
-// OPRAVA DMA_BUF A BÍLÉ OBRAZOVKY PRO RASPBERRY PI (32-bit)
+// 1. AUTOMATICKÁ OPRAVA SDÍLENÉ PAMĚTI (Řeší pád na notebooku i Pi)
 // ============================================================================
-app.disableHardwareAcceleration();
-app.commandLine.appendSwitch('disable-gpu');
-app.commandLine.appendSwitch('disable-gpu-compositing');
-// ZÁSADNÍ: Přinutí Electron ignorovat dma_buf a vykreslit vše přes SwiftShader (CPU)
-app.commandLine.appendSwitch('use-gl', 'swiftshader'); 
-app.commandLine.appendSwitch('no-sandbox');
-app.commandLine.appendSwitch('disable-dev-shm-usage');
+app.commandLine.appendSwitch('disable-dev-shm-usage'); // Přesměruje paměť do /tmp, řeší chybu permision na /dev/shm
+
+// Pro Raspberry Pi ponecháme softwarové vykreslování bezpečně zapnuté
+if (process.arch === 'arm' || process.arch === 'arm64') {
+    app.disableHardwareAcceleration();
+    app.commandLine.appendSwitch('disable-gpu');
+}
+
+// ============================================================================
+// 2. AUTOMATICKÁ INSTALACE USB PRÁV (Udev) BEZ TERMINÁLU
+// ============================================================================
+function checkAndInstallUdevRules() {
+    if (process.platform !== 'linux') return; // Na Windows/macOS udev neexistuje
+
+    const rulePath = '/etc/udev/rules.d/99-wacom.rules';
+    
+    // Pokud pravidlo ještě neexistuje, nainstalujeme ho pomocí grafického sudo (pkexec)
+    if (!fs.existsSync(rulePath)) {
+        console.log("Udev pravidlo chybí. Spouštím automatickou instalaci přes systémové okno...");
+        
+        const ruleContent = 'SUBSYSTEM=="usb", ATTRS{idVendor}=="056a", ATTRS{idProduct}=="00a4", MODE="0666"\\nSUBSYSTEM=="hidraw", ATTRS{idVendor}=="056a", ATTRS{idProduct}=="00a4", MODE="0666"';
+        
+        // pkexec vyvolá nativní systémové okno pro zadání hesla (žádný terminál!)
+        const cmd = `pkexec bash -c "echo -e '${ruleContent}' > ${rulePath} && udevadm control --reload-rules && udevadm trigger"`;
+        
+        exec(cmd, (error, stdout, stderr) => {
+            if (error) {
+                console.error("Uživatel zrušil instalaci USB práv nebo zadal špatné heslo:", error);
+            } else {
+                console.log("USB udev pravidla byla úspěšně zapsána na pozadí!");
+            }
+        });
+    }
+}
 
 function createWindow() {
     const win = new BrowserWindow({
@@ -23,13 +52,10 @@ function createWindow() {
         }
     });
 
-    win.loadFile(path.join(__dirname, 'index.html'));
-
-    // Otevření konzole pro případnou kontrolu chyb (můžeš později smazat)
-    win.webContents.openDevTools();
+    win.loadFile('index.html');
 
     // ============================================================================
-    // AUTOMATICKÉ PÁROVÁNÍ WACCOM TABLETU
+    // 3. AUTOMATICKÉ PÁROVÁNÍ WEBHID (Už žádné vyskakovací okno Chromia)
     // ============================================================================
     win.webContents.session.on('select-hid-device', (event, details, callback) => {
         event.preventDefault();
@@ -50,8 +76,11 @@ function createWindow() {
     });
 }
 
+// Inicializace aplikace
 app.whenReady().then(() => {
+    checkAndInstallUdevRules(); // Zkontroluje a případně graficky doinstaluje USB udev pravidla
     createWindow();
+
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) createWindow();
     });
