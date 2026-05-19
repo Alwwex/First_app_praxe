@@ -10,5 +10,8 @@ contextBridge.exposeInMainWorld('api', {
     nactiPravidla: () => ipcRenderer.invoke('nacti-pravidla'),
     nactiVsechnyCleny: () => ipcRenderer.invoke('nacti-vsechny-cleny'),
     ulozPravidlo: (obsah, poradi) => ipcRenderer.invoke('uloz-pravidlo', obsah, poradi),
-    smazPravidla: () => ipcRenderer.invoke('smaz-pravidla')
+    smazPravidla: () => ipcRenderer.invoke('smaz-pravidla'),
+    
+    // Nová funkce pro opravu USB
+    opravUsb: () => ipcRenderer.invoke('oprav-usb')
 });
