@@ -2,44 +2,39 @@ const { app, BrowserWindow } = require('electron');
 const path = require('path');
 
 // ============================================================================
-// OPRAVA PRO 64-BIT RASPBERRY PI OS 12 (WAYLAND / BOOKWORM)
+// OPRAVA PRO RASPBERRY PI OS 12 BOOKWORM (64-BIT)
+// Tyto proměnné musíme nastavit JEŠTĚ PŘED inicializací Electronu
 // ============================================================================
-// Přinutíme Electron komunikovat s novým grafickým systémem Wayland
-app.commandLine.appendSwitch('ozone-platform-hint', 'auto');
+process.env.ELECTRON_OZONE_PLATFORM_HINT = 'x11'; // Vynutí starý spolehlivý X11 režim místo Waylandu
+process.env.LIBGL_ALWAYS_SOFTWARE = '1';          // Odřízne grafiku už na úrovni Linuxu
 
-// Bezpečné vypnutí problematických grafických bufferů
+// Bezpečné vypnutí problematických částí Chromia
 app.disableHardwareAcceleration();
 app.commandLine.appendSwitch('disable-gpu');
 app.commandLine.appendSwitch('disable-gpu-compositing');
-app.commandLine.appendSwitch('disable-software-rasterizer');
-
-// Pojistky proti pádům linuxového jádra na Raspberry
-app.commandLine.appendSwitch('disable-dev-shm-usage');
 app.commandLine.appendSwitch('no-sandbox');
+
+// POZOR: Úmyslně jsme smazali 'disable-dev-shm-usage', protože to na novém OS způsobovalo chybu s /tmp
+app.commandLine.appendSwitch('ozone-platform', 'x11');
 
 function createWindow() {
     const win = new BrowserWindow({
         width: 700,
         height: 600,
-        resizable: false, // Ideální pro stabilní registrační kiosek
+        resizable: false,
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true
         }
     });
 
-    // Načtení samotného plátna přes absolutní cestu
     win.loadFile(path.join(__dirname, 'index.html'));
-
-    // Pokud bys potřeboval hledat chyby v HTML/JS, odkomentuj řádek níže:
-    // win.webContents.openDevTools();
 
     // ============================================================================
     // AUTOMATICKÉ PÁROVÁNÍ WEBHID PRO WACOM STU-430
     // ============================================================================
     win.webContents.session.on('select-hid-device', (event, details, callback) => {
         event.preventDefault();
-        // Hledáme tablet podle Vendor ID (1386) a Product ID (164)
         const device = details.deviceList.find((d) => d.vendorId === 1386 && d.productId === 164);
         
         if (device) {
@@ -58,7 +53,6 @@ function createWindow() {
     });
 }
 
-// Inicializace celé aplikace
 app.whenReady().then(() => {
     createWindow();
 
@@ -67,7 +61,6 @@ app.whenReady().then(() => {
     });
 });
 
-// Čisté ukončení procesu po zavření okna
 app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit();
 });
