@@ -11,9 +11,10 @@ function checkAndInstallUdevRules(callback) {
 
     const rulePath = '/etc/udev/rules.d/99-wacom.rules';
     
+    // Krok 1: Pokud pravidla v systemu nejsou, vyzadame si heslo a zapiseme je
     if (!fs.existsSync(rulePath)) {
         const ruleContent = 'SUBSYSTEM=="usb", ATTRS{idVendor}=="056a", ATTRS{idProduct}=="00a4", MODE="0666"\\nSUBSYSTEM=="hidraw", ATTRS{idVendor}=="056a", ATTRS{idProduct}=="00a4", MODE="0666"';
-        const cmd = `pkexec bash -c "echo -e '${ruleContent}' > ${rulePath} && udevadm control --reload-rules && udevadm trigger && chmod 666 /dev/hidraw* || true"`;
+        const cmd = `pkexec bash -c "echo -e '${ruleContent}' > ${rulePath} && udevadm control --reload-rules && udevadm trigger && chmod 666 /dev/hidraw* && chmod -R 666 /dev/bus/usb/ || true"`;
 
         exec(cmd, () => {
             callback(); 
@@ -21,7 +22,10 @@ function checkAndInstallUdevRules(callback) {
         return;
     }
 
-    callback();
+    // Krok 2: Pokud pravidla uz existuji, jen potichu odemkneme aktualni USB porty
+    exec('sudo chmod 666 /dev/hidraw* && sudo chmod -R 666 /dev/bus/usb/ || true', () => {
+        callback();
+    });
 }
 
 function createWindow() {
