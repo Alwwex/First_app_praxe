@@ -68,26 +68,42 @@
 
             this.connect = async function () {
                 if (this.checkConnected()) return true;
-                let devices = await navigator.hid.getDevices(); // Electron načte schválené z main.js
-                if (!devices || devices.length === 0) {
-                    devices = await navigator.hid.requestDevice({ filters: [{ vendorId: this.config.vid, productId: this.config.pid }] });
-                }
-                if (!devices || devices.length === 0) return false;
-                this.device = devices[0] || devices;
-                if (!this.device.opened) await this.device.open();
-
-                this.device.addEventListener("inputreport", function (event) {
-                    if (!this.config.onPenDataCb) return;
-                    if (event.reportId === this.command.penData || event.reportId === this.command.penDataTiming) {
-                        let data = event.data;
-                        this.config.onPenDataCb({
-                            cx: data.getUint16(2),
-                            cy: data.getUint16(4),
-                            press: data.getUint16(0) / this.config.pressureFactor
-                        });
+                
+                try {
+                    // OPRAVA: Ignorujeme stará spojení. Vždy si natvrdo řekneme o nové zařízení!
+                    // Tím se vyhneme problému se zamrzlým tlačítkem po odpojení kabelu.
+                    let devices = await navigator.hid.requestDevice({ filters: [{ vendorId: this.config.vid, productId: this.config.pid }] });
+                    
+                    if (!devices || devices.length === 0) {
+                        alert("Tablet nebyl nalezen. Zkontrolujte zapojení USB kabelu.");
+                        return false;
                     }
-                }.bind(this));
-                return true;
+                    
+                    this.device = devices[0];
+                    
+                    if (!this.device.opened) {
+                        await this.device.open();
+                    }
+
+                    this.device.addEventListener("inputreport", function (event) {
+                        if (!this.config.onPenDataCb) return;
+                        if (event.reportId === this.command.penData || event.reportId === this.command.penDataTiming) {
+                            let data = event.data;
+                            this.config.onPenDataCb({
+                                cx: data.getUint16(2),
+                                cy: data.getUint16(4),
+                                press: data.getUint16(0) / this.config.pressureFactor
+                            });
+                        }
+                    }.bind(this));
+                    
+                    return true;
+                    
+                } catch (err) {
+                    // Pokud to systém zablokuje, už to neumře tiše, ale zařve to na obrazovku!
+                    alert("Kritická chyba při spojení s tabletem:\n" + err.message + "\n\nZkuste tablet vypojit a zapojit.");
+                    return false;
+                }
             }.bind(this);
 
             this.sendData = async function (reportId, data) {
@@ -113,7 +129,7 @@
         const scaleX = canvas.width / 9600;
         const scaleY = canvas.height / 6000;
 
-        // Vyladěný Streamline faktor pro čisté mikro-detaily bez klikatění
+        // Vyladěný Streamline faktor pro čisté mikro-detaily
         const SMOOTHING_FACTOR = 0.38;
         let smoothX = 0, smoothY = 0;
         const sensitivityThreshold = 35; // Ochrana proti hoveringu
@@ -124,13 +140,20 @@
         });
 
         document.getElementById("connectBtn").addEventListener("click", async function(){
-            if (await wacom.connect()) {
+            // Okamžitá vizuální reakce tlačítka
+            this.innerText = "Připojuji...";
+            
+            let success = await wacom.connect();
+            
+            if (success) {
                 await wacom.clearScreen();
                 await wacom.setWritingMode(1);
                 await wacom.setInking(true);
                 await wacom.setPenColorAndWidth("#000000", 2);
-                document.getElementById("connectBtn").innerText = "Připojeno ✔";
-                document.getElementById("connectBtn").style.background = "#28a745";
+                this.innerText = "Připojeno ✔";
+                this.style.background = "#28a745";
+            } else {
+                this.innerText = "Připojit tablet"; // Vrátíme zpět, pokud nastala chyba
             }
         });
 
