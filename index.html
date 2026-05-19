@@ -39,13 +39,13 @@
 </head>
 <body>
 
-    <h2>PodpisovÃ½ systÃ©m Wacom</h2>
-    <p style="margin-top:0; color:#aaa; font-size:14px;">Stav: PÅipraveno</p>
+    <h2>Podpisový systém Wacom</h2>
+    <p style="margin-top:0; color:#aaa; font-size:14px;">Stav: Připraveno</p>
     
     <div class="controls">
-        <button id="connectBtn">PÅipojit tablet</button>
+        <button id="connectBtn">Připojit tablet</button>
         <button id="clearBtn">Smazat</button>
-        <button id="saveBtn">UloÅ¾it podpis</button>
+        <button id="saveBtn">Uložit podpis</button>
     </div>
 
     <div id="canvasWrapper">
@@ -53,14 +53,8 @@
     </div>
 
     <script>
-        // === DRIVER WACOMSTU430 (ZabudovanÃ½ pÅÃ­mo do frontendu) ===
         var wacomstu430 = function () {
-            this.config = {
-                vid: 1386,
-                pid: 164,
-                pressureFactor: 1023,
-                onPenDataCb: null
-            };
+            this.config = { vid: 1386, pid: 164, pressureFactor: 1023, onPenDataCb: null };
             this.command = { penData: 0x01, clearScreen: 0x20, writingMode: 0x0E, inkMode: 0x21, penColorAndWidth: 0x2D, penDataTiming: 0x34 };
             this.device = null;
 
@@ -70,38 +64,30 @@
                 if (this.checkConnected()) return true;
                 
                 try {
-                    // OPRAVA: Ignorujeme starÃ¡ spojenÃ­. VÅ¾dy si natvrdo Åekneme o novÃ© zaÅÃ­zenÃ­!
-                    // TÃ­m se vyhneme problÃ©mu se zamrzlÃ½m tlaÄÃ­tkem po odpojenÃ­ kabelu.
                     let devices = await navigator.hid.requestDevice({ filters: [{ vendorId: this.config.vid, productId: this.config.pid }] });
                     
                     if (!devices || devices.length === 0) {
-                        alert("Tablet nebyl nalezen. Zkontrolujte zapojenÃ­ USB kabelu.");
+                        alert("Tablet nebyl nalezen. Zkontrolujte zapojení USB kabelu.");
                         return false;
                     }
                     
                     this.device = devices[0];
-                    
-                    if (!this.device.opened) {
-                        await this.device.open();
-                    }
+                    if (!this.device.opened) await this.device.open();
 
                     this.device.addEventListener("inputreport", function (event) {
                         if (!this.config.onPenDataCb) return;
                         if (event.reportId === this.command.penData || event.reportId === this.command.penDataTiming) {
                             let data = event.data;
                             this.config.onPenDataCb({
-                                cx: data.getUint16(2),
-                                cy: data.getUint16(4),
+                                cx: data.getUint16(2), cy: data.getUint16(4),
                                 press: data.getUint16(0) / this.config.pressureFactor
                             });
                         }
                     }.bind(this));
                     
                     return true;
-                    
                 } catch (err) {
-                    // Pokud to systÃ©m zablokuje, uÅ¾ to neumÅe tiÅ¡e, ale zaÅve to na obrazovku!
-                    alert("KritickÃ¡ chyba pÅi spojenÃ­ s tabletem:\n" + err.message + "\n\nZkuste tablet vypojit a zapojit.");
+                    alert("Kritická chyba při spojení s tabletem:\n" + err.message + "\n\nZkuste tablet vypojit a zapojit.");
                     return false;
                 }
             }.bind(this);
@@ -119,7 +105,6 @@
             this.onPenData = function (callback) { this.config.onPenDataCb = callback; }.bind(this);
         };
 
-        // === LOGIKA VYKRESLOVÃNÃ KÅIVEK ===
         var wacom = new wacomstu430();
         var canvas = document.getElementById("signatureCanvas");
         var context = canvas.getContext("2d");
@@ -128,11 +113,9 @@
         var lastX = 0, lastY = 0, lastMidX = 0, lastMidY = 0;
         const scaleX = canvas.width / 9600;
         const scaleY = canvas.height / 6000;
-
-        // VyladÄnÃ½ Streamline faktor pro ÄistÃ© mikro-detaily
         const SMOOTHING_FACTOR = 0.38;
         let smoothX = 0, smoothY = 0;
-        const sensitivityThreshold = 35; // Ochrana proti hoveringu
+        const sensitivityThreshold = 35;
 
         window.addEventListener('DOMContentLoaded', () => {
             context.lineCap = 'round'; context.lineJoin = 'round';
@@ -140,9 +123,7 @@
         });
 
         document.getElementById("connectBtn").addEventListener("click", async function(){
-            // OkamÅ¾itÃ¡ vizuÃ¡lnÃ­ reakce tlaÄÃ­tka
-            this.innerText = "PÅipojuji...";
-            
+            this.innerText = "Připojuji...";
             let success = await wacom.connect();
             
             if (success) {
@@ -150,10 +131,10 @@
                 await wacom.setWritingMode(1);
                 await wacom.setInking(true);
                 await wacom.setPenColorAndWidth("#000000", 2);
-                this.innerText = "PÅipojeno â";
+                this.innerText = "Připojeno ✔";
                 this.style.background = "#28a745";
             } else {
-                this.innerText = "PÅipojit tablet"; // VrÃ¡tÃ­me zpÄt, pokud nastala chyba
+                this.innerText = "Připojit tablet";
             }
         });
 
@@ -163,41 +144,29 @@
         });
 
         document.getElementById("saveBtn").addEventListener("click", function(){
-            var dataURL = canvas.toDataURL("image/png");
             var a = document.createElement("a");
-            a.href = dataURL; a.download = "podpis.png";
+            a.href = canvas.toDataURL("image/png"); a.download = "podpis.png";
             document.body.appendChild(a); a.click(); document.body.removeChild(a);
         });
 
         wacom.onPenData(function(pen) {
-            if (pen.cx === 0 && pen.cy === 0) return; // Ignorovat glitch skoky
-
-            var drawX = pen.cx * scaleX;
-            var drawY = pen.cy * scaleY;
-            const penDown = pen.press > sensitivityThreshold;
-
-            if (!penDown) {
-                smoothX = drawX; smoothY = drawY;
-                isDrawing = false;
+            if (pen.cx === 0 && pen.cy === 0) return;
+            var drawX = pen.cx * scaleX; var drawY = pen.cy * scaleY;
+            
+            if (pen.press < sensitivityThreshold) {
+                smoothX = drawX; smoothY = drawY; isDrawing = false;
             } else {
                 if (!isDrawing) {
-                    lastX = smoothX; lastY = smoothY;
-                    lastMidX = smoothX; lastMidY = smoothY;
-                    isDrawing = true;
+                    lastX = smoothX; lastY = smoothY; lastMidX = smoothX; lastMidY = smoothY; isDrawing = true;
                 } else {
                     smoothX = smoothX * (1 - SMOOTHING_FACTOR) + drawX * SMOOTHING_FACTOR;
                     smoothY = smoothY * (1 - SMOOTHING_FACTOR) + drawY * SMOOTHING_FACTOR;
+                    var midX = (lastX + smoothX) / 2; var midY = (lastY + smoothY) / 2;
 
-                    var midX = (lastX + smoothX) / 2;
-                    var midY = (lastY + smoothY) / 2;
-
-                    context.beginPath();
-                    context.moveTo(lastMidX, lastMidY);
-                    context.quadraticCurveTo(lastX, lastY, midX, midY);
-                    context.stroke();
+                    context.beginPath(); context.moveTo(lastMidX, lastMidY);
+                    context.quadraticCurveTo(lastX, lastY, midX, midY); context.stroke();
                     
-                    lastX = smoothX; lastY = smoothY;
-                    lastMidX = midX; lastMidY = midY;
+                    lastX = smoothX; lastY = smoothY; lastMidX = midX; lastMidY = midY;
                 }
             }
         });
