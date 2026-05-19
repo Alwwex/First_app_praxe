@@ -1,21 +1,28 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, dialog } = require('electron');
 const path = require('path');
+const fs = require('fs');
+const { exec } = require('child_process');
 
-// ============================================================================
-// OPRAVA PRO RASPBERRY PI OS 12 BOOKWORM (64-BIT)
-// Tyto proměnné musíme nastavit JEŠTĚ PŘED inicializací Electronu
-// ============================================================================
-process.env.ELECTRON_OZONE_PLATFORM_HINT = 'x11'; // Vynutí starý spolehlivý X11 režim místo Waylandu
-process.env.LIBGL_ALWAYS_SOFTWARE = '1';          // Odřízne grafiku už na úrovni Linuxu
+function checkAndInstallUdevRules(callback) {
+    if (process.platform !== 'linux') {
+        callback();
+        return;
+    }
 
-// Bezpečné vypnutí problematických částí Chromia
-app.disableHardwareAcceleration();
-app.commandLine.appendSwitch('disable-gpu');
-app.commandLine.appendSwitch('disable-gpu-compositing');
-app.commandLine.appendSwitch('no-sandbox');
+    const rulePath = '/etc/udev/rules.d/99-wacom.rules';
+    
+    if (!fs.existsSync(rulePath)) {
+        const ruleContent = 'SUBSYSTEM=="usb", ATTRS{idVendor}=="056a", ATTRS{idProduct}=="00a4", MODE="0666"\\nSUBSYSTEM=="hidraw", ATTRS{idVendor}=="056a", ATTRS{idProduct}=="00a4", MODE="0666"';
+        const cmd = `pkexec bash -c "echo -e '${ruleContent}' > ${rulePath} && udevadm control --reload-rules && udevadm trigger && chmod 666 /dev/hidraw* || true"`;
 
-// POZOR: Úmyslně jsme smazali 'disable-dev-shm-usage', protože to na novém OS způsobovalo chybu s /tmp
-app.commandLine.appendSwitch('ozone-platform', 'x11');
+        exec(cmd, () => {
+            callback(); 
+        });
+        return;
+    }
+
+    callback();
+}
 
 function createWindow() {
     const win = new BrowserWindow({
@@ -30,9 +37,6 @@ function createWindow() {
 
     win.loadFile(path.join(__dirname, 'index.html'));
 
-    // ============================================================================
-    // AUTOMATICKÉ PÁROVÁNÍ WEBHID PRO WACOM STU-430
-    // ============================================================================
     win.webContents.session.on('select-hid-device', (event, details, callback) => {
         event.preventDefault();
         const device = details.deviceList.find((d) => d.vendorId === 1386 && d.productId === 164);
@@ -54,7 +58,9 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
-    createWindow();
+    checkAndInstallUdevRules(() => {
+        createWindow();
+    });
 
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) createWindow();
